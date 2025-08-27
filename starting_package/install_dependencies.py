@@ -11,16 +11,13 @@ def run_command(command):
         sys.exit(1)
 
 def install_packages():
-    # Ensure python3 is available as python
-    run_command("sudo update-alternatives --install /usr/bin/python python /usr/bin/python3 1")
-
     # Update package lists
     run_command("sudo apt update")
 
     # Install required system packages
     run_command("sudo apt-get install -y v4l-utils python3-pip")
 
-    # Install Python libraries
+    # Install Python libraries (keep opencv-python even if it conflicts)
     run_command("python3 -m pip install mysql-connector-python Flask opencv-python numpy")
 
     # Get the current directory where the script is located
@@ -29,12 +26,9 @@ def install_packages():
     # Define the new directory for jetson_inference
     jetson_inference_dir = os.path.join(current_dir, "jetson-inference")
 
-    # Create the new directory if it does not exist
+    # Clone & build Jetson Inference if not already installed
     if not os.path.exists(jetson_inference_dir):
-        # Clone the Jetson Inference repository into the new directory
         run_command("git clone --recursive https://github.com/dusty-nv/jetson-inference")
-
-        # Install Jetson Inference (assumes you have the necessary environment)
         os.chdir(jetson_inference_dir)
         run_command("git submodule update --init")
         os.makedirs("build", exist_ok=True)
@@ -54,7 +48,7 @@ def find_file(filename, search_path):
     return None
 
 def setup_systemd_service(service_name, script_path):
-    """Set up the systemd service for the CV script."""
+    """Set up the systemd service for the CV script (runs as root)."""
     service_file = f"/etc/systemd/system/{service_name}.service"
     temp_service_file = f"{service_name}.service"
 
@@ -65,7 +59,7 @@ After=network.target
 [Service]
 ExecStart=/usr/bin/python3 {script_path}
 Restart=always
-User={os.getenv("USER")}
+User=root
 WorkingDirectory={os.path.dirname(script_path)}
 
 [Install]
@@ -86,7 +80,8 @@ WantedBy=multi-user.target
     print(f"Service {service_name} has been set up and started.")
 
 def go_to_starting_folder():
-    starting_folder = os.path.expanduser("~/opencv_publish_and_feed/starting_package")
+    """Move to repo starting_package folder for consistent paths."""
+    starting_folder = os.path.expanduser("~/sfWeldVisionV2/starting_package")
     if os.path.exists(starting_folder):
         os.chdir(starting_folder)
     else:
@@ -97,8 +92,8 @@ if __name__ == "__main__":
     install_packages()
     go_to_starting_folder()
 
-    target_file = "sfvis.py"  
-    search_directory = os.getcwd()  # Start searching in the current directory
+    target_file = "sfvis.py"
+    search_directory = os.getcwd()  # Start searching in starting_package
 
     # Find the file
     script_path = find_file(target_file, search_directory)
